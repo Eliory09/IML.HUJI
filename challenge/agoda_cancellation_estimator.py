@@ -23,6 +23,7 @@ class AgodaCancellationEstimator(BaseEstimator):
         """
         super().__init__()
 
+
     def _fit(self, X: np.ndarray, y: np.ndarray) -> NoReturn:
         """
         Fit an estimator for given samples
