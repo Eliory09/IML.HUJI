@@ -11,9 +11,12 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 import pandas as pd
 import requests
+import plotly.express as px
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
 
 
-def load_data(filename: str, url: str):
+def load_data(filename: str, url: str, estimator: AgodaCancellationEstimator):
     """
     Load Agoda booking cancellation dataset
     Parameters
@@ -31,8 +34,8 @@ def load_data(filename: str, url: str):
     # TODO - replace below code with any desired preprocessing
     full_data = pd.read_csv(filename).drop_duplicates()
     currencies_data = requests.get(url).json()['rates']
-    week_start = datetime(2018, 5, 30).date()
-    week_end = datetime(2018, 6, 6).date()
+    week_start = datetime(2018, 12, 7).date()
+    week_end = datetime(2018, 12, 13).date()
 
     features = full_data
     features['booking_datetime'] = \
@@ -48,37 +51,23 @@ def load_data(filename: str, url: str):
             features['checkin_date'] - features['booking_datetime'])
     booking_checkin_diff = [int(diff.days) for diff in booking_checkin_diff]
     features.insert(1, 'booking_checkin_diff', booking_checkin_diff)
-    # has_cancelled = [0 if date is np.nan else 1
-    #                  for date in features['cancellation_datetime']]
-    has_cancelled = []
-    for date in features['cancellation_datetime']:
-        if date is np.nan:
-            has_cancelled.append(0)
-            continue
-        date = datetime.strptime(date, "%Y-%m-%d").date()
-        is_in_week = 1 if week_start <= date <= week_end else 0
-        has_cancelled.append(is_in_week)
 
-    # cancellation_days_before_checkin = []
-    # for i, cancel_date in enumerate(features['cancellation_datetime']):
-    #     if cancel_date is np.nan:
-    #         cancellation_days_before_checkin.append(np.nan)
-    #         continue
-    #     cancellation_days_before_checkin.append(
-    #         int((cancel_date - features['checkin_date'][i]).days))
-    # ser = pd.Series(cancellation_days_before_checkin)
-    # features.insert(3, 'cancellation_days_before_checkin', ser)
+    cancellation_days_before_checkin = []
+    for i, checkin_date in enumerate(features['checkin_date']):
+        cancellation_days_before_checkin.append(
+            int((checkin_date - week_start).days))
+    ser = pd.Series(cancellation_days_before_checkin)
+    features.insert(3, 'cancellation_days_before_checkin', ser)
 
-    ser = pd.Series(has_cancelled)
-    features.insert(2, 'has_cancelled', ser)
     features = pd.get_dummies(features, columns=[
-        'hotel_country_code',
+        # 'hotel_country_code',
         'hotel_star_rating',
         'accommadation_type_name',
         'charge_option',
-        'origin_country_code',
+        # 'origin_country_code',
         'original_payment_type',
-        'hotel_city_code'])
+        # 'hotel_city_code'
+    ])
 
     vacation_duration = (
             features['checkout_date'] - features['checkin_date'])
@@ -128,13 +117,41 @@ def load_data(filename: str, url: str):
     ser = pd.Series(risks_in_usd)
     features.insert(6, 'risks_in_usd', ser)
     # print(features['booking_checkin_diff'].corr(features['has_cancelled']))
+
+    features['is_user_logged_in'] = [0 if val == 'False' or not val or val is np.nan else 1
+                                     for val in features['is_user_logged_in']]
+
+    features['is_first_booking'] = [
+        0 if val == 'False' or not val or val is np.nan else 1
+        for val in features['is_first_booking']]
+
+    for cat in ['request_nonesmoke', 'request_latecheckin', 'request_highfloor',
+                'request_largebed', 'request_twinbeds',
+                'request_earlycheckin', 'request_airport', "cancellation_days_before_checkin"]:
+        features[cat] = features[cat].fillna(0)
+
+    top_5_countries = estimator.top_5_countries
+    group = [1 if code in top_5_countries else 0
+             for code in features['origin_country_code']]
+    features.insert(7, 'origin_top_5_countries', group)
+
+    hotels_top_5_countries = estimator.hotels_top_5_countries
+    group = [1 if code in hotels_top_5_countries else 0
+             for code in features['hotel_country_code']]
+    features.insert(7, 'hotels_top_5_countries', group)
+
+    hotels_top_5_cities = estimator.hotels_top_5_cities
+    group = [1 if code in hotels_top_5_cities else 0
+             for code in features['hotel_city_code']]
+    features.insert(7, 'hotels_top_5_cities', group)
+
     features.drop([
         'h_booking_id',
         'hotel_id',
         'booking_datetime',
         'checkin_date',
         'checkout_date',
-        'cancellation_datetime',
+        # 'cancellation_datetime',
         'hotel_live_date',
         'h_customer_id',
         'customer_nationality',
@@ -146,11 +163,14 @@ def load_data(filename: str, url: str):
         'cancellation_policy_code',
         'hotel_brand_code',
         'hotel_chain_code',
-        'hotel_area_code'
+        'hotel_area_code',
+        # "has_cancelled",
+        "hotel_country_code",
+        "hotel_city_code",
+        "origin_country_code"
     ], axis=1, inplace=True)
-    labels = full_data["cancellation_datetime"]
 
-    return features, labels
+    return features
 
 
 def evaluate_and_export(estimator: BaseEstimator, X: np.ndarray,
@@ -178,15 +198,64 @@ def evaluate_and_export(estimator: BaseEstimator, X: np.ndarray,
 
 
 if __name__ == '__main__':
+    np.random.seed(0)
     # Load data
     url = 'https://api.exchangerate-api.com/v4/latest/USD'
-    df, cancellation_labels = load_data(
+    estimator = AgodaCancellationEstimator()
+    df, cancellation_labels = estimator.load_data(
         "../datasets/agoda_cancellation_train.csv", url)
-    train_X, train_y, test_X, test_y = train_test_split(df,
-                                                        cancellation_labels)
+    # fig, ax = go.subplots(figsize=(22, 15))
+    # corr_df = df.corr()
+    # go.Figure([go.Heatmap(x=df.columns, y=df.columns, z=corr_df,
+    #                       type='heatmap',
+    #                       colorscale='Viridis')]).show(renderer="browser")
+
+
+
+
+    # Groupby origin_country_code
+
+    # group = (df.groupby(['origin_country_code'])['has_cancelled'].sum()
+    #          / df.groupby(['origin_country_code']).size()).reset_index(name="ratio")
+    #
+    # px.bar(group.sort_values(by=['ratio'], ascending=False).head(5), x="origin_country_code", y="ratio",
+    #        height=500).show(renderer="browser")
+    #
+    # group1 = (df.groupby(['hotel_city_code'])[
+    #              'has_cancelled'].sum() / df.groupby(
+    #     ['hotel_city_code']).size()).reset_index(name="ratio")
+    #
+    # px.bar(group1.sort_values(by=['ratio'], ascending=False).head(5),
+    #        x="hotel_city_code", y="ratio",
+    #        height=500).show(renderer="browser")
+    #
+    # group2 = (df.groupby(['hotel_country_code'])[
+    #               'has_cancelled'].sum() / df.groupby(
+    #     ['hotel_country_code']).size()).reset_index(name="ratio")
+    #
+    # px.bar(group2.sort_values(by=['ratio'], ascending=False).head(5),
+    #        x="hotel_country_code", y="ratio",
+    #        height=500).show(renderer="browser")
+    #
+    # group.apply(lambda x: x['has_cancelled/count'] / x["origin_country_code/count"], axis=1)
+    # group['has_cancelled'] = group['has_cancelled'] / group['size']
 
     # Fit model over data
-    # estimator = AgodaCancellationEstimator().fit(train_X, train_y)
+
+    new_df = load_data("test_set_week_1.csv", url, estimator)
+
+    # Get missing columns in the training test
+    total_columns = set(df.columns).symmetric_difference(set(new_df.columns))
+    # Add a missing column in test set with default value equal to 0
+    for c in total_columns:
+        if c not in new_df.columns:
+            new_df[c] = 0
+        if c not in df.columns:
+            df[c] = 0
+    # Ensure the order of column in the test set is in the same order than in train set
+    new_df = new_df[new_df.columns]
+    df = df[df.columns]
 
     # Store model predictions over test set
-    # evaluate_and_export(estimator, test_X, "id1_id2_id3.csv")
+    estimator.fit(df.to_numpy(), cancellation_labels)
+    evaluate_and_export(estimator, new_df.to_numpy(), "313577207_316305101_dor.csv")
