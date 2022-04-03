@@ -1,5 +1,8 @@
 from __future__ import annotations
 from typing import NoReturn
+
+from sklearn.linear_model import LogisticRegression
+
 from IMLearn.base import BaseEstimator
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
@@ -17,6 +20,7 @@ import requests
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+from sklearn.metrics import roc_curve, auc
 
 
 class AgodaCancellationEstimator(BaseEstimator):
@@ -39,7 +43,7 @@ class AgodaCancellationEstimator(BaseEstimator):
         super().__init__()
         self.features = None
         self.labels = None
-        self.model = RandomForestClassifier()
+        self.model = LogisticRegression(solver='lbfgs', max_iter=3000)
         self.top_5_countries = []
         self.hotels_top_5_countries = []
         self.hotels_top_5_cities = []
@@ -60,14 +64,30 @@ class AgodaCancellationEstimator(BaseEstimator):
         -----
 
         """
-        train_X, test_X, train_y, test_y = train_test_split(self.features,
-                                                            self.labels,
-                                                            test_size=0.1)
-        self.model.fit(train_X, train_y)
-        print(self.model.score(test_X, test_y))
+        # train_X, test_X, train_y, test_y = train_test_split(self.features,
+        #                                                     self.labels,
+        #                                                     test_size=0.1)
+        # self.model.fit(train_X, train_y)
+        # print(self.model.score(test_X, test_y))
+        # fpr, tpr, thresholds = roc_curve(test_y, self.model.predict_proba(test_X)[:, 1])
+        # fig = go.Figure(
+        #     data=[go.Scatter(x=[0, 1], y=[0, 1], mode="lines",
+        #                      line=dict(color="black", dash='dash'),
+        #                      name="Random Class Assignment"),
+        #           go.Scatter(x=fpr, y=tpr, mode='markers+lines',
+        #                      text=thresholds, name="", showlegend=False,
+        #                      marker_size=5, marker_color="blue",
+        #                      hovertemplate="<b>Threshold:</b>%{text:.3f}<br>FPR: %{x:.3f}<br>TPR: %{y:.3f}")],
+        #     layout=go.Layout(
+        #         title=rf"$\text{{ROC Curve Of Fitted Model - AUC}}={auc(fpr, tpr):.6f}$",
+        #         xaxis=dict(title=r"$\text{False Positive Rate (FPR)}$"),
+        #         yaxis=dict(title=r"$\text{True Positive Rate (TPR)}$")))
+        # fig.show(renderer="browser")
+        #
+        # THRESHOLD = 0.05
+        # preds = pd.Series(np.where(self.model.predict_proba(test_X)[:, 1] > THRESHOLD, 1, 0))
 
         self.model.fit(X, y)
-
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -83,7 +103,10 @@ class AgodaCancellationEstimator(BaseEstimator):
         responses : ndarray of shape (n_samples, )
             Predicted responses of given samples
         """
-        return self.model.predict(X)
+        THRESHOLD = 0.02
+        preds = pd.Series(
+            np.where(self.model.predict_proba(X)[:, 1] > THRESHOLD, 1, 0))
+        return preds.to_numpy()
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         """
@@ -167,11 +190,18 @@ class AgodaCancellationEstimator(BaseEstimator):
         features.insert(3, 'cancellation_days_before_checkin', ser)
 
         features = pd.get_dummies(features, columns=[
-            'hotel_star_rating',
             'accommadation_type_name',
             'charge_option',
             'original_payment_type',
         ])
+
+        for col_name in features.columns:
+            for word in ["accommadation_type_name", "charge_option"]:
+                if word in col_name:
+                    if all(word1 not in col_name for word1 in
+                           ["Boat", "Love Hotel", "Hotel", "Resort", "Ryokan",
+                            "Pay Now", "Pay Later"]):
+                        features.drop([col_name], axis=1, inplace=True)
 
         vacation_duration = (
                 features['checkout_date'] - features['checkin_date'])
@@ -234,7 +264,8 @@ class AgodaCancellationEstimator(BaseEstimator):
         for cat in ['request_nonesmoke', 'request_latecheckin',
                     'request_highfloor',
                     'request_largebed', 'request_twinbeds',
-                    'request_earlycheckin', 'request_airport', "cancellation_days_before_checkin"]:
+                    'request_earlycheckin', 'request_airport',
+                    "cancellation_days_before_checkin"]:
             features[cat] = features[cat].fillna(0)
 
         labels = features["has_cancelled"]
@@ -276,7 +307,6 @@ class AgodaCancellationEstimator(BaseEstimator):
         features.insert(7, 'hotel_top_5_cities', hotel_top_5_cities)
         self.hotels_top_5_cities = list(group['hotel_city_code'])
 
-
         features.drop([
             'h_booking_id',
             'hotel_id',
@@ -299,7 +329,17 @@ class AgodaCancellationEstimator(BaseEstimator):
             "has_cancelled",
             "hotel_country_code",
             "hotel_city_code",
-            "origin_country_code"
+            "origin_country_code",
+            "request_earlycheckin",
+            "request_latecheckin",
+            "request_highfloor",
+            "no_of_extra_bed",
+            "request_airport",
+            "no_of_adults",
+            "usd_prices",
+            "charge_option_Pay Now",
+            "is_first_booking",
+            "is_user_logged_in"
         ], axis=1, inplace=True)
 
         self.features = features

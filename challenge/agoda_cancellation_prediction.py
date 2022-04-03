@@ -14,6 +14,7 @@ import requests
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+from sklearn.metrics import roc_curve
 
 
 def load_data(filename: str, url: str, estimator: AgodaCancellationEstimator):
@@ -60,13 +61,9 @@ def load_data(filename: str, url: str, estimator: AgodaCancellationEstimator):
     features.insert(3, 'cancellation_days_before_checkin', ser)
 
     features = pd.get_dummies(features, columns=[
-        # 'hotel_country_code',
-        'hotel_star_rating',
-        'accommadation_type_name',
         'charge_option',
-        # 'origin_country_code',
-        'original_payment_type',
-        # 'hotel_city_code'
+        'accommadation_type_name',
+        'original_payment_type'
     ])
 
     vacation_duration = (
@@ -118,16 +115,19 @@ def load_data(filename: str, url: str, estimator: AgodaCancellationEstimator):
     features.insert(6, 'risks_in_usd', ser)
     # print(features['booking_checkin_diff'].corr(features['has_cancelled']))
 
-    features['is_user_logged_in'] = [0 if val == 'False' or not val or val is np.nan else 1
-                                     for val in features['is_user_logged_in']]
+    features['is_user_logged_in'] = [
+        0 if val == 'False' or not val or val is np.nan else 1
+        for val in features['is_user_logged_in']]
 
     features['is_first_booking'] = [
         0 if val == 'False' or not val or val is np.nan else 1
         for val in features['is_first_booking']]
 
-    for cat in ['request_nonesmoke', 'request_latecheckin', 'request_highfloor',
+    for cat in ['request_nonesmoke', 'request_latecheckin',
+                'request_highfloor',
                 'request_largebed', 'request_twinbeds',
-                'request_earlycheckin', 'request_airport', "cancellation_days_before_checkin"]:
+                'request_earlycheckin', 'request_airport',
+                "cancellation_days_before_checkin"]:
         features[cat] = features[cat].fillna(0)
 
     top_5_countries = estimator.top_5_countries
@@ -167,7 +167,17 @@ def load_data(filename: str, url: str, estimator: AgodaCancellationEstimator):
         # "has_cancelled",
         "hotel_country_code",
         "hotel_city_code",
-        "origin_country_code"
+        "origin_country_code",
+        "request_earlycheckin",
+        "request_latecheckin",
+        "request_highfloor",
+        "no_of_extra_bed",
+        "request_airport",
+        "no_of_adults",
+        "usd_prices",
+        "charge_option_Pay Now",
+        "is_first_booking",
+        "is_user_logged_in"
     ], axis=1, inplace=True)
 
     return features
@@ -204,14 +214,31 @@ if __name__ == '__main__':
     estimator = AgodaCancellationEstimator()
     df, cancellation_labels = estimator.load_data(
         "../datasets/agoda_cancellation_train.csv", url)
+
     # fig, ax = go.subplots(figsize=(22, 15))
-    # corr_df = df.corr()
-    # go.Figure([go.Heatmap(x=df.columns, y=df.columns, z=corr_df,
-    #                       type='heatmap',
-    #                       colorscale='Viridis')]).show(renderer="browser")
+    corr_df = df.corr()
+    go.Figure([go.Heatmap(x=df.columns, y=df.columns, z=corr_df,
+                          type='heatmap',
+                          colorscale='Viridis')]).show(renderer="browser")
 
+    corrs = []
+    for col in df.columns:
+        x = np.array(df[col])
+        corr = np.cov(x, cancellation_labels)[0][1] / (
+                x.std(ddof=0) * cancellation_labels.std(ddof=0))
+        corrs.append(corr)
+    corrs = np.array(corrs)
 
-
+    fig = go.Figure([go.Scatter(x=df.columns, y=corrs,
+                                name=r"Correlation Between Orders Features "
+                                     r"and Cancellations",
+                                mode='markers',
+                                marker=dict(color="LightSkyBlue"),
+                                showlegend=False)],
+                    layout=dict(
+                        title=r"$\text{(1) Correlation Between Orders Features "
+                              r"and Cancellations}$"))
+    fig.show(renderer="browser")
 
     # Groupby origin_country_code
 
@@ -252,10 +279,12 @@ if __name__ == '__main__':
             new_df[c] = 0
         if c not in df.columns:
             df[c] = 0
+
     # Ensure the order of column in the test set is in the same order than in train set
     new_df = new_df[new_df.columns]
     df = df[df.columns]
 
     # Store model predictions over test set
     estimator.fit(df.to_numpy(), cancellation_labels)
-    evaluate_and_export(estimator, new_df.to_numpy(), "313577207_316305101_dor.csv")
+    evaluate_and_export(estimator, new_df.to_numpy(),
+                        "313577207_316305101_312163421.csv")
