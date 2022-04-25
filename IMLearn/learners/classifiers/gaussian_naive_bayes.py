@@ -39,7 +39,20 @@ class GaussianNaiveBayes(BaseEstimator):
         y : ndarray of shape (n_samples, )
             Responses of input data to fit to
         """
-        raise NotImplementedError()
+        self.classes_, nk = np.unique(y, return_counts=True)
+        self.pi_ = nk / y.shape[0]
+
+        x_sums = np.zeros((self.classes_.shape[0], X.shape[1]))
+        for idx, val in enumerate(y):
+            i = np.where(self.classes_ == val)[0]
+            x_sums[i] += X[idx]
+        self.mu_ = x_sums / nk[:, None]
+
+        self.vars_ = np.zeros((self.classes_.shape[0], X.shape[1]))
+        for i, k in enumerate(self.classes_):
+            self.vars_[i] = np.diag((X[y == k] - self.mu_[i, :]).T
+                                    @ (X[y == k] - self.mu_[i, :]))
+        self.vars_ /= nk[:, None]
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -55,7 +68,7 @@ class GaussianNaiveBayes(BaseEstimator):
         responses : ndarray of shape (n_samples, )
             Predicted responses of given samples
         """
-        raise NotImplementedError()
+        return self.classes_[np.argmax(self.likelihood(X), axis=1)]
 
     def likelihood(self, X: np.ndarray) -> np.ndarray:
         """
@@ -73,9 +86,23 @@ class GaussianNaiveBayes(BaseEstimator):
 
         """
         if not self.fitted_:
-            raise ValueError("Estimator must first be fitted before calling `likelihood` function")
+            raise ValueError(
+                "Estimator must first be fitted before calling `likelihood` function")
 
-        raise NotImplementedError()
+        likelihoods = []
+        m, d = X.shape
+
+        def normal_distribution_per_class(x):
+            x_likelihoods = []
+            for i, k in enumerate(self.classes_):
+                a = 1 / np.sqrt(((2 * np.pi) ** d) * np.prod(self.vars_[i]))
+                b = np.exp(-0.5 * (x - self.mu_[i]) * (1 / self.vars_[i]) @ (
+                        x - self.mu_[i]).T)
+                x_likelihoods.append(a * b * self.pi_[i])
+            likelihoods.append(x_likelihoods)
+
+        np.apply_along_axis(normal_distribution_per_class, arr=X, axis=1)
+        return np.array(likelihoods)
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         """
@@ -95,4 +122,4 @@ class GaussianNaiveBayes(BaseEstimator):
             Performance under missclassification loss function
         """
         from ...metrics import misclassification_error
-        raise NotImplementedError()
+        return misclassification_error(y, self.predict(X))
