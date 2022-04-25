@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import Callable
 from typing import NoReturn
 from ...base import BaseEstimator
-from ...metrics.loss_functions import misclassification_error
 import numpy as np
 
 
@@ -53,70 +52,45 @@ class Perceptron(BaseEstimator):
         """
         Fit a halfspace to to given samples. Iterate over given data as long as there exists a sample misclassified
         or that did not reach `self.max_iter_`
-
         Parameters
         ----------
         X : ndarray of shape (n_samples, n_features)
             Input data to fit an estimator for
-
         y : ndarray of shape (n_samples, )
             Responses of input data to fit to
-
         Notes
         -----
         Fits model with or without an intercept depending on value of `self.fit_intercept_`
         """
-        if self.include_intercept_:
-            X = np.insert(X, obj=0, values=1, axis=1)
-        w = np.zeros(X.shape[1])
-        self.coefs_ = w
-        z = y * (X @ w)
-        iter_num = 0
-        self.training_loss_ = []
-        self.fitted_ = True
-        while np.any(z <= 0) and iter_num <= self.max_iter_:
-            i = np.where(z <= 0)[0][0]
-            w = w + (y[i] * X[i, :]).T
-            z = y * (X @ w)
-            iter_num += 1
-            self.coefs_ = w
-            self.training_loss_.append(
-                misclassification_error(y, np.sign(X @ w)))
-            self.callback_(self, X[i, :], y[i])
+        raise NotImplementedError()
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """
         Predict responses for given samples using fitted estimator
-
         Parameters
         ----------
         X : ndarray of shape (n_samples, n_features)
             Input data to predict responses for
-
         Returns
         -------
         responses : ndarray of shape (n_samples, )
             Predicted responses of given samples
         """
-        if self.include_intercept_:
-            X = np.insert(X, obj=0, values=1, axis=1)
-        return np.sign(X @ self.coefs_)
+        raise NotImplementedError()
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         """
         Evaluate performance under misclassification loss function
-
         Parameters
         ----------
         X : ndarray of shape (n_samples, n_features)
             Test samples
-
         y : ndarray of shape (n_samples, )
             True labels of test samples
-
         Returns
         -------
         loss : float
             Performance under missclassification loss function
         """
-        return misclassification_error(y, self._predict(X))
+        from ...metrics import misclassification_error
+        raise NotImplementedError()
