@@ -10,16 +10,20 @@ def load_dataset(filename: str) -> Tuple[np.ndarray, np.ndarray]:
     """
     Load dataset for comparing the Gaussian Naive Bayes and LDA classifiers. File is assumed to be an
     ndarray of shape (n_samples, 3) where the first 2 columns represent features and the third column the class
+
     Parameters
     ----------
     filename: str
         Path to .npy data file
+
     Returns
     -------
     X: ndarray of shape (n_samples, 2)
         Design matrix to be used
+
     y: ndarray of shape (n_samples,)
         Class vector specifying for each sample its class
+
     """
     data = np.load(filename)
     return data[:, :2], data[:, 2].astype(int)
@@ -28,6 +32,7 @@ def load_dataset(filename: str) -> Tuple[np.ndarray, np.ndarray]:
 def run_perceptron():
     """
     Fit and plot fit progression of the Perceptron algorithm over both the linearly separable and inseparable datasets
+
     Create a line plot that shows the perceptron algorithm's training loss values (y-axis)
     as a function of the training iterations (x-axis).
     """
@@ -46,12 +51,15 @@ def run_perceptron():
 def get_ellipse(mu: np.ndarray, cov: np.ndarray):
     """
     Draw an ellipse centered at given location and according to specified covariance matrix
+
     Parameters
     ----------
     mu : ndarray of shape (2,)
         Center of ellipse
+
     cov: ndarray of shape (2,2)
         Covariance of Gaussian
+
     Returns
     -------
         scatter: A plotly trace object of the ellipse
