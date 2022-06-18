@@ -1,3 +1,5 @@
+import numpy as np
+
 from IMLearn.learners.classifiers import Perceptron, LDA, GaussianNaiveBayes
 from typing import Tuple
 from utils import *
@@ -36,7 +38,8 @@ def run_perceptron():
     Create a line plot that shows the perceptron algorithm's training loss values (y-axis)
     as a function of the training iterations (x-axis).
     """
-    for n, f in [("Linearly Separable", "linearly_separable.npy"), ("Linearly Inseparable", "linearly_inseparable.npy")]:
+    for n, f in [("Linearly Separable", "linearly_separable.npy"),
+                 ("Linearly Inseparable", "linearly_inseparable.npy")]:
         # Load dataset
         data = np.load(f"../datasets/{f}")
 
@@ -49,17 +52,17 @@ def run_perceptron():
 
         # Plot figure of loss as function of fitting iteration
         fig = go.Figure([go.Scatter(x=np.linspace(1, 1000, 1000), y=losses,
-                                    name=r"Misclassification Error over 1000 "
-                                         r"iterations of Perceptron Algorithm "
-                                         r"on dataset",
+                                    name=rf"Misclassification Error over 1000 "
+                                         rf"iterations of Perceptron Algorithm "
+                                         rf"on {f} dataset",
                                     mode='markers+lines',
                                     marker=dict(color="#5BC5E5"),
                                     line=dict(color="#5BC5E5", dash='dash'),
                                     showlegend=False)],
                         layout=dict(
-                            title=r"Misclassification Error over 1000 "
-                                  r"iterations of Perceptron Algorithm "
-                                  r"on dataset"))
+                            title=rf"Misclassification Error over 1000 "
+                                  rf"iterations of Perceptron Algorithm "
+                                  rf"on {f} dataset"))
         fig.show(renderer="browser")
 
 
@@ -80,12 +83,15 @@ def get_ellipse(mu: np.ndarray, cov: np.ndarray):
         scatter: A plotly trace object of the ellipse
     """
     l1, l2 = tuple(np.linalg.eigvalsh(cov)[::-1])
-    theta = atan2(l1 - cov[0, 0], cov[0, 1]) if cov[0, 1] != 0 else (np.pi / 2 if cov[0, 0] < cov[1, 1] else 0)
+    theta = atan2(l1 - cov[0, 0], cov[0, 1]) if cov[0, 1] != 0 else (
+        np.pi / 2 if cov[0, 0] < cov[1, 1] else 0)
     t = np.linspace(0, 2 * pi, 100)
     xs = (l1 * np.cos(theta) * np.cos(t)) - (l2 * np.sin(theta) * np.sin(t))
     ys = (l1 * np.sin(theta) * np.cos(t)) + (l2 * np.cos(theta) * np.sin(t))
 
-    return go.Scatter(x=mu[0] + xs, y=mu[1] + ys, mode="lines", marker_color="black")
+    return go.Scatter(x=mu[0] + xs, y=mu[1] + ys, mode="lines",
+                      showlegend=False,
+                      marker_color="black")
 
 
 def compare_gaussian_classifiers():
@@ -96,7 +102,7 @@ def compare_gaussian_classifiers():
 
     for f in ["gaussian1.npy", "gaussian2.npy"]:
         # Load dataset
-        X, y = load_dataset(f)
+        X, y = load_dataset(f"../datasets/{f}")
 
         # Fit models and predict over training set
         lda = LDA()
@@ -116,9 +122,9 @@ def compare_gaussian_classifiers():
             rf"$\textbf{{(1) {f} Dataset, "
             rf"Classifier: LDA, "
             rf"Accuracy: {accuracy(y, lda_y_pred)}}}$",
-            rf"$\textbf{{(1) {f} Dataset, "
+            rf"$\textbf{{(2) {f} Dataset, "
             rf"Classifier: Gaussian Naive Bayes, "
-            rf"Accuracy: {np.round(accuracy(y, gnb_y_pred), 2)}}}$"))
+            rf"Accuracy: {accuracy(y, gnb_y_pred):.2f}}}$"))
 
         fig.add_trace(
             go.Scatter(x=X[:, 0], y=X[:, 1], mode="markers", showlegend=False,
@@ -148,7 +154,15 @@ def compare_gaussian_classifiers():
             row=1, col=2)
 
         # Add ellipses depicting the covariances of the fitted Gaussians
-        # raise NotImplementedError()
+        for i in range(lda.mu_.shape[0]):
+            fig.add_trace(get_ellipse(lda.mu_[i], lda.cov_),
+                          row=1, col=1)
+
+        for i in range(gnb.mu_.shape[0]):
+            fig.add_trace(get_ellipse(gnb.mu_[i], np.diag(gnb.vars_[i])),
+                          row=1, col=2)
+
+        fig.show(renderer="browser")
 
 
 if __name__ == '__main__':

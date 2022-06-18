@@ -2,6 +2,9 @@ from __future__ import annotations
 from typing import NoReturn
 from ...base import BaseEstimator
 import numpy as np
+from numpy.linalg import pinv
+
+from ...metrics import mean_square_error
 
 
 class RidgeRegression(BaseEstimator):
@@ -11,7 +14,8 @@ class RidgeRegression(BaseEstimator):
     Solving Ridge Regression optimization problem
     """
 
-    def __init__(self, lam: float, include_intercept: bool = True) -> RidgeRegression:
+    def __init__(self, lam: float,
+                 include_intercept: bool = True) -> RidgeRegression:
         """
         Initialize a ridge regression model
 
@@ -32,7 +36,6 @@ class RidgeRegression(BaseEstimator):
             Coefficients vector fitted by linear regression. To be set in
             `LinearRegression.fit` function.
         """
-
 
         """
         Initialize a ridge regression model
@@ -59,7 +62,17 @@ class RidgeRegression(BaseEstimator):
         -----
         Fits model with or without an intercept depending on value of `self.include_intercept_`
         """
-        raise NotImplementedError()
+
+        m, d = X.shape
+        matrix = np.sqrt(self.lam_) * np.identity(d)
+        X_lambda = np.concatenate((X, matrix), axis=0)
+        y_lambda = np.concatenate((y, np.zeros(d)))
+
+        if self.include_intercept_:
+            X_lambda = np.pad(X_lambda, [(0, 0), (1, 0)], 'constant',
+                              constant_values=1)
+            X_lambda[m + 1:, 0] = 0
+        self.coefs_ = pinv(X_lambda) @ y_lambda
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -75,7 +88,9 @@ class RidgeRegression(BaseEstimator):
         responses : ndarray of shape (n_samples, )
             Predicted responses of given samples
         """
-        raise NotImplementedError()
+        if self.include_intercept_:
+            X = np.pad(X, [(0, 0), (1, 0)], 'constant', constant_values=1)
+        return X @ self.coefs_
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         """
@@ -94,4 +109,4 @@ class RidgeRegression(BaseEstimator):
         loss : float
             Performance under MSE loss function
         """
-        raise NotImplementedError()
+        return mean_square_error(y, self.predict(X))

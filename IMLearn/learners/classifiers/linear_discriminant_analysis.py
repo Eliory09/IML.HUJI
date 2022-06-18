@@ -25,6 +25,7 @@ class LDA(BaseEstimator):
     self.pi_: np.ndarray of shape (n_classes)
         The estimated class probabilities. To be set in `GaussianNaiveBayes.fit`
     """
+
     def __init__(self):
         """
         Instantiate an LDA classifier
@@ -130,4 +131,3 @@ class LDA(BaseEstimator):
         """
         from ...metrics import misclassification_error
         return misclassification_error(y, self.predict(X))
-

@@ -39,12 +39,14 @@ class GradientDescent:
         Callable function receives as input any argument relevant for the current GD iteration. Arguments
         are specified in the `GradientDescent.fit` function
     """
+
     def __init__(self,
                  learning_rate: BaseLR = FixedLR(1e-3),
                  tol: float = 1e-5,
                  max_iter: int = 1000,
                  out_type: str = "last",
-                 callback: Callable[[GradientDescent, ...], None] = default_callback):
+                 callback: Callable[
+                     [GradientDescent, ...], None] = default_callback):
         """
         Instantiate a new instance of the GradientDescent class
 
@@ -119,4 +121,37 @@ class GradientDescent:
                 Euclidean norm of w^(t)-w^(t-1)
 
         """
-        raise NotImplementedError()
+        x_t = f.weights
+        avg, best, last = f.weights, f.weights, f.weights
+        best_val = f.compute_output()
+        t = 0
+        eta = self.learning_rate_.lr_step(t=t)
+        val, grad = f.compute_output(X=X, y=y), f.compute_jacobian(X=X, y=y)
+        while t < self.max_iter_ and eta >= self.tol_:
+            x_t1 = x_t - eta * grad
+            f.weights = x_t1
+            last = x_t1
+            best = best if best_val < val else x_t1
+            avg += last
+            val, grad = f.compute_output(X=X, y=y), f.compute_jacobian(X=X, y=y)
+            delta = np.sqrt(np.sum(np.square(x_t - x_t1)))
+            if self.callback_:
+                self.callback_(solver=self,
+                               weights=f.weights,
+                               val=val,
+                               grad=grad,
+                               t=t,
+                               eta=eta,
+                               delta=delta)
+            eta = self.learning_rate_.lr_step(t=t + 1)
+            t += 1
+            x_t = x_t1
+
+        avg /= t
+
+        if self.out_type_ == "last":
+            return last
+        elif self.out_type_ == "best":
+            return best
+        elif self.out_type_ == "average":
+            return avg

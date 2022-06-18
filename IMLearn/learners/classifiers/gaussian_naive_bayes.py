@@ -2,10 +2,12 @@ from typing import NoReturn
 from ...base import BaseEstimator
 import numpy as np
 
+
 class GaussianNaiveBayes(BaseEstimator):
     """
     Gaussian Naive-Bayes classifier
     """
+
     def __init__(self):
         """
         Instantiate a Gaussian Naive Bayes classifier
@@ -52,7 +54,7 @@ class GaussianNaiveBayes(BaseEstimator):
         for i, k in enumerate(self.classes_):
             self.vars_[i] = np.diag((X[y == k] - self.mu_[i, :]).T
                                     @ (X[y == k] - self.mu_[i, :]))
-        self.vars_ /= nk[:, None]
+        self.vars_ /= nk[:, None] - 1
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """
